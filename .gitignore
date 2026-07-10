@@ -1,0 +1,13 @@
+.DS_Store
+node_modules
+.next
+out
+coverage
+playwright-report
+test-results
+*.log
+.env
+.env.local
+github-token.txt
+.github-token-local
+.github-upload.mjs
