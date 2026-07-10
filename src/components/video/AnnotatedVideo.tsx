@@ -8,8 +8,8 @@ import {
   denormalizePoint,
   geometryFromPoints,
   normalizePoint,
-  roundedTime,
-  TOOL_STYLES
+  PERSISTENT_ANNOTATION_END,
+  styleForTool
 } from "@/lib/annotation-utils";
 import { formatDuration } from "@/lib/format";
 import type { Annotation, AnnotationType, Point } from "@/lib/types";
@@ -26,7 +26,8 @@ type AnnotatedVideoProps = {
   annotations: Annotation[];
   submissionId?: string;
   activeTool?: AnnotationType;
-  annotationDuration?: number;
+  annotationColor?: string;
+  annotationStrokeWidth?: number;
   onAddAnnotation?: (annotation: Omit<Annotation, "id">) => void;
   onTimeChange?: (time: number) => void;
   seekRequest?: SeekRequest;
@@ -79,10 +80,38 @@ function shapePoints(annotation: Annotation, size: Size) {
   return { first, second, third };
 }
 
+function denormalizePath(points: Point[] | undefined, size: Size) {
+  return (points ?? []).flatMap((point) => {
+    const next = denormalizePoint(point, size.width, size.height);
+    return [next.x, next.y];
+  });
+}
+
+function annotationStartTime(seconds: number) {
+  return Math.max(0, Math.floor((seconds - 0.08) * 10) / 10);
+}
+
+function distance(first: Point, second: Point) {
+  return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
 function AnnotationShape({ annotation, size }: { annotation: Annotation; size: Size }) {
   const { first, second, third } = shapePoints(annotation, size);
   const stroke = annotation.style.stroke;
   const strokeWidth = annotation.style.strokeWidth;
+
+  if (annotation.type === "draw") {
+    return (
+      <Line
+        points={denormalizePath(annotation.normalizedGeometry.points, size)}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        lineCap="round"
+        lineJoin="round"
+        tension={0.35}
+      />
+    );
+  }
 
   if (annotation.type === "arrow") {
     return (
@@ -168,7 +197,8 @@ export function AnnotatedVideo({
   annotations,
   submissionId,
   activeTool,
-  annotationDuration = 4,
+  annotationColor = "#f2b84b",
+  annotationStrokeWidth = 5,
   onAddAnnotation,
   onTimeChange,
   seekRequest,
@@ -212,13 +242,20 @@ export function AnnotatedVideo({
       return annotations;
     }
 
-    return annotations.filter((annotation) => annotationVisibleAt(annotation, currentTime));
+    const videoTime = videoRef.current?.currentTime;
+    const visibleTime = Number.isFinite(videoTime) ? Math.max(currentTime, videoTime ?? currentTime) : currentTime;
+    return annotations.filter((annotation) => annotationVisibleAt(annotation, visibleTime));
   }, [annotations, currentTime, showAllAnnotations]);
 
-  function handleTimeUpdate() {
+  function syncVideoClock() {
     const nextTime = videoRef.current?.currentTime ?? 0;
     setCurrentTime(nextTime);
     onTimeChange?.(nextTime);
+    return nextTime;
+  }
+
+  function handleTimeUpdate() {
+    syncVideoClock();
   }
 
   function togglePlayback() {
@@ -245,14 +282,18 @@ export function AnnotatedVideo({
       return;
     }
 
-    const timeStart = roundedTime(videoRef.current?.currentTime ?? currentTime);
-    const baseAnnotation = {
+    const videoTime = syncVideoClock();
+    const timeStart = annotationStartTime(videoTime);
+    const baseAnnotation: DraftAnnotation = {
       submissionId,
       type: activeTool,
       timeStart,
-      timeEnd: roundedTime(timeStart + annotationDuration),
-      style: TOOL_STYLES[activeTool],
-      normalizedGeometry: geometryFromPoints(activeTool, start, start)
+      timeEnd: PERSISTENT_ANNOTATION_END,
+      style: styleForTool(activeTool, annotationColor, annotationStrokeWidth),
+      normalizedGeometry:
+        activeTool === "draw"
+          ? { x1: start.x, y1: start.y, x2: start.x, y2: start.y, points: [start] }
+          : geometryFromPoints(activeTool, start, start)
     };
 
     if (activeTool === "text") {
@@ -271,6 +312,7 @@ export function AnnotatedVideo({
           y2: Math.min(1, start.y + 0.08)
         }
       });
+      setCurrentTime(videoTime);
       return;
     }
 
@@ -288,6 +330,27 @@ export function AnnotatedVideo({
       return;
     }
 
+    if (draft.type === "draw") {
+      const points = draft.normalizedGeometry.points ?? [
+        { x: draft.normalizedGeometry.x1, y: draft.normalizedGeometry.y1 }
+      ];
+      const lastPoint = points[points.length - 1];
+      if (lastPoint && distance(lastPoint, end) < 0.004) {
+        return;
+      }
+
+      setDraft({
+        ...draft,
+        normalizedGeometry: {
+          ...draft.normalizedGeometry,
+          x2: end.x,
+          y2: end.y,
+          points: [...points, end]
+        }
+      });
+      return;
+    }
+
     setDraft({
       ...draft,
       normalizedGeometry: geometryFromPoints(draft.type, dragStart, end)
@@ -302,9 +365,16 @@ export function AnnotatedVideo({
     }
 
     const geometry = draft.normalizedGeometry;
-    const dx = Math.abs((geometry.x2 ?? geometry.x1) - geometry.x1);
-    const dy = Math.abs((geometry.y2 ?? geometry.y1) - geometry.y1);
-    if (dx + dy > 0.02) {
+    const points = geometry.points ?? [];
+    const hasEnoughInk =
+      draft.type === "draw"
+        ? points.length > 2 && points.some((point) => distance(point, points[0]) > 0.01)
+        : Math.abs((geometry.x2 ?? geometry.x1) - geometry.x1) +
+            Math.abs((geometry.y2 ?? geometry.y1) - geometry.y1) >
+          0.02;
+
+    if (hasEnoughInk) {
+      syncVideoClock();
       onAddAnnotation(draft);
     }
 
@@ -324,6 +394,8 @@ export function AnnotatedVideo({
           controls={false}
           crossOrigin="anonymous"
           onTimeUpdate={handleTimeUpdate}
+          onSeeking={handleTimeUpdate}
+          onSeeked={handleTimeUpdate}
           onLoadedMetadata={() => setDuration(videoRef.current?.duration ?? 0)}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}

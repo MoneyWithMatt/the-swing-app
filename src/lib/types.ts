@@ -6,7 +6,7 @@ export type SubmissionStatus = "submitted" | "in_review" | "ready";
 
 export type VideoStorageKind = "remote" | "local_data_url" | "session_object_url";
 
-export type AnnotationType = "line" | "arrow" | "circle" | "angle" | "text";
+export type AnnotationType = "draw" | "line" | "arrow" | "circle" | "angle" | "text";
 
 export type AnalysisStatus = "draft" | "sent";
 
@@ -22,6 +22,7 @@ export type NormalizedGeometry = {
   y2?: number;
   x3?: number;
   y3?: number;
+  points?: Point[];
 };
 
 export type AnnotationStyle = {
@@ -48,7 +49,7 @@ export type Golfer = {
 
 export type VideoAsset = {
   id: string;
-  kind: "swing" | "analysis_narration";
+  kind: "swing" | "analysis_narration" | "analysis_recording";
   url: string;
   posterUrl?: string;
   duration?: number;

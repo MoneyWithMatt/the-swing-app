@@ -40,6 +40,7 @@ export function GolferRequestPage({ id }: { id: string }) {
   const coach = getCoach(submission.coachId);
   const video = getVideo(submission.videoAssetId);
   const analysis = getAnalysisForSubmission(submission.id);
+  const recordingVideo = analysis?.narrationAssetId ? getVideo(analysis.narrationAssetId) : undefined;
   const annotations = getAnnotationsForSubmission(submission.id);
   const isReady = submission.status === "ready" && video && analysis;
 
@@ -67,7 +68,7 @@ export function GolferRequestPage({ id }: { id: string }) {
       </section>
 
       {isReady ? (
-        <AnalysisPlayer video={video} analysis={analysis} annotations={annotations} />
+        <AnalysisPlayer video={video} recordingVideo={recordingVideo} analysis={analysis} annotations={annotations} />
       ) : (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <section className="rounded-lg border border-ink/10 bg-white p-5">

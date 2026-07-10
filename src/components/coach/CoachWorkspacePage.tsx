@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Save, Send, Trash2 } from "lucide-react";
 import { AnnotationToolbar } from "@/components/annotation/AnnotationToolbar";
+import { RecordingPanel } from "@/components/coach/RecordingPanel";
 import {
   Button,
   FieldLabel,
@@ -15,7 +16,7 @@ import {
   TextInput,
   TopBar
 } from "@/components/ui/primitives";
-import { roundedTime } from "@/lib/annotation-utils";
+import { PERSISTENT_ANNOTATION_END, roundedTime } from "@/lib/annotation-utils";
 import { formatDuration } from "@/lib/format";
 import { createDraftAnalysis } from "@/lib/mock-data";
 import { useSwingStore } from "@/lib/mock-store";
@@ -28,6 +29,8 @@ const AnnotatedVideo = dynamic(
     loading: () => <div className="aspect-video rounded-lg border border-ink/10 bg-ink" />
   }
 );
+
+const DRAW_COLORS = ["#f2b84b", "#5ba86c", "#c96f4a", "#ffffff", "#17211b"];
 
 function updateChapter(chapters: AnalysisChapter[], chapterId: string, patch: Partial<AnalysisChapter>) {
   return chapters.map((chapter) => (chapter.id === chapterId ? { ...chapter, ...patch } : chapter));
@@ -46,7 +49,8 @@ export function CoachWorkspacePage({ id }: { id: string }) {
     updateSubmissionStatus,
     addAnnotation,
     deleteAnnotation,
-    upsertAnalysis
+    upsertAnalysis,
+    saveAnalysisRecording
   } = useSwingStore();
   const submission = getSubmission(id);
   const coach = submission ? getCoach(submission.coachId) : undefined;
@@ -55,10 +59,12 @@ export function CoachWorkspacePage({ id }: { id: string }) {
   const annotations = submission ? getAnnotationsForSubmission(submission.id) : [];
   const storedAnalysis = submission ? getAnalysisForSubmission(submission.id) : undefined;
   const [activeTool, setActiveTool] = useState<AnnotationType>("line");
-  const [annotationDuration, setAnnotationDuration] = useState(4);
+  const [activeColor, setActiveColor] = useState(DRAW_COLORS[0]);
+  const [activeStrokeWidth, setActiveStrokeWidth] = useState(5);
   const [currentTime, setCurrentTime] = useState(0);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [savedLabel, setSavedLabel] = useState("");
+  const recordingVideo = analysis?.narrationAssetId ? getVideo(analysis.narrationAssetId) : undefined;
 
   useEffect(() => {
     if (!hydrated || !submission) {
@@ -134,6 +140,23 @@ export function CoachWorkspacePage({ id }: { id: string }) {
     });
   }
 
+  function handleRecordingReady(recording: { url: string; mimeType: string; duration?: number }) {
+    if (!submission) {
+      return;
+    }
+
+    const recordingAssetId = saveAnalysisRecording(submission.id, recording);
+    setAnalysis((current) => (current ? { ...current, narrationAssetId: recordingAssetId } : current));
+  }
+
+  function annotationTimeLabel(annotation: Annotation) {
+    if (annotation.timeEnd >= PERSISTENT_ANNOTATION_END) {
+      return `from ${formatDuration(annotation.timeStart)} onward`;
+    }
+
+    return `${formatDuration(annotation.timeStart)} - ${formatDuration(annotation.timeEnd)}`;
+  }
+
   function saveAndPreview() {
     persist();
     router.push(`/coach/submissions/${id}/preview`);
@@ -194,20 +217,38 @@ export function CoachWorkspacePage({ id }: { id: string }) {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
         <section className="space-y-4">
           <div className="rounded-lg border border-ink/10 bg-white p-4">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mb-4 grid gap-3">
               <AnnotationToolbar activeTool={activeTool} onSelectTool={setActiveTool} />
-              <label className="flex items-center gap-2 text-sm font-bold text-ink/70">
-                Show for
-                <input
-                  className="focus-ring w-16 rounded-md border border-ink/15 px-2 py-1"
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={annotationDuration}
-                  onChange={(event) => setAnnotationDuration(Number(event.target.value))}
-                />
-                sec
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-ink/10 bg-paper px-3 py-2">
+                <div className="flex items-center gap-2">
+                  {DRAW_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      aria-label={`Use ${color}`}
+                      className="focus-ring h-8 w-8 rounded-full border border-ink/20"
+                      style={{
+                        backgroundColor: color,
+                        boxShadow: activeColor === color ? "0 0 0 3px rgba(47,111,78,0.35)" : undefined
+                      }}
+                      onClick={() => setActiveColor(color)}
+                    />
+                  ))}
+                </div>
+                <label className="flex min-w-44 flex-1 items-center gap-2 text-sm font-bold text-ink/70 sm:max-w-56">
+                  Width
+                  <input
+                    aria-label="Line width"
+                    className="w-full accent-moss"
+                    type="range"
+                    min={3}
+                    max={12}
+                    value={activeStrokeWidth}
+                    onChange={(event) => setActiveStrokeWidth(Number(event.target.value))}
+                  />
+                  <span className="w-8 text-right">{activeStrokeWidth}px</span>
+                </label>
+              </div>
             </div>
             <AnnotatedVideo
               videoUrl={video.url}
@@ -215,14 +256,17 @@ export function CoachWorkspacePage({ id }: { id: string }) {
               annotations={annotations}
               submissionId={submission.id}
               activeTool={activeTool}
-              annotationDuration={annotationDuration}
+              annotationColor={activeColor}
+              annotationStrokeWidth={activeStrokeWidth}
               onAddAnnotation={handleAddAnnotation}
               onTimeChange={(time) => setCurrentTime(roundedTime(time))}
             />
           </div>
 
+          <RecordingPanel recordingVideo={recordingVideo} onRecordingReady={handleRecordingReady} />
+
           <div className="rounded-lg border border-ink/10 bg-white p-4">
-            <SectionHeading title="Annotations" detail="Timestamped marks are attached to the active chapter." />
+            <SectionHeading title="Annotations" />
             <div className="grid gap-2">
               {sortedAnnotations.length ? (
                 sortedAnnotations.map((annotation) => (
@@ -233,7 +277,7 @@ export function CoachWorkspacePage({ id }: { id: string }) {
                     <div>
                       <p className="text-sm font-bold capitalize text-ink">{annotation.type}</p>
                       <p className="text-xs font-semibold text-ink/50">
-                        {formatDuration(annotation.timeStart)} - {formatDuration(annotation.timeEnd)}
+                        {annotationTimeLabel(annotation)}
                         {annotation.text ? ` · ${annotation.text}` : ""}
                       </p>
                     </div>

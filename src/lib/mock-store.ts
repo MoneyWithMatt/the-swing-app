@@ -193,6 +193,50 @@ export function useSwingStore() {
     [commit]
   );
 
+  const saveAnalysisRecording = useCallback(
+    (
+      submissionId: string,
+      recording: {
+        url: string;
+        mimeType: string;
+        duration?: number;
+      }
+    ) => {
+      const recordingAssetId = createId("recording");
+
+      commit((current) => {
+        const submission = current.submissions.find((item) => item.id === submissionId);
+        const existing = current.analyses.find((analysis) => analysis.submissionId === submissionId);
+        const draft = existing ?? createDraftAnalysis(submissionId, submission?.coachId ?? MATT_COACH_ID);
+        const videoAsset: VideoAsset = {
+          id: recordingAssetId,
+          kind: "analysis_recording",
+          url: recording.url,
+          duration: recording.duration,
+          mimeType: recording.mimeType,
+          storageKind: "session_object_url"
+        };
+        const nextAnalysis: Analysis = {
+          ...draft,
+          narrationAssetId: recordingAssetId
+        };
+
+        return {
+          ...current,
+          videoAssets: [videoAsset, ...current.videoAssets],
+          analyses: existing
+            ? current.analyses.map((analysis) =>
+                analysis.submissionId === submissionId ? nextAnalysis : analysis
+              )
+            : [...current.analyses, nextAnalysis]
+        };
+      });
+
+      return recordingAssetId;
+    },
+    [commit]
+  );
+
   const ensureDraftAnalysis = useCallback(
     (submissionId: string, coachId = MATT_COACH_ID) => {
       const existing = state.analyses.find((analysis) => analysis.submissionId === submissionId);
@@ -258,6 +302,7 @@ export function useSwingStore() {
     addAnnotation,
     deleteAnnotation,
     upsertAnalysis,
+    saveAnalysisRecording,
     ensureDraftAnalysis,
     sendAnalysis,
     ...selectors

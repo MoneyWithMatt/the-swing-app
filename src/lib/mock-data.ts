@@ -1,4 +1,5 @@
 import type { Analysis, AppState } from "./types";
+import { PERSISTENT_ANNOTATION_END } from "./annotation-utils";
 
 export const MATT_COACH_ID = "coach_matt";
 export const DEMO_GOLFER_ID = "golfer_demo";
@@ -116,7 +117,7 @@ export function createDefaultState(): AppState {
         submissionId: "sub_demo_ready",
         type: "line",
         timeStart: 0,
-        timeEnd: 4,
+        timeEnd: PERSISTENT_ANNOTATION_END,
         normalizedGeometry: { x1: 0.38, y1: 0.2, x2: 0.55, y2: 0.82 },
         style: { stroke: "#f2b84b", strokeWidth: 5 },
         text: "Spine angle"
@@ -126,7 +127,7 @@ export function createDefaultState(): AppState {
         submissionId: "sub_demo_ready",
         type: "circle",
         timeStart: 4,
-        timeEnd: 8,
+        timeEnd: PERSISTENT_ANNOTATION_END,
         normalizedGeometry: { x1: 0.42, y1: 0.42, x2: 0.64, y2: 0.66 },
         style: { stroke: "#5ba86c", fill: "rgba(91, 168, 108, 0.12)", strokeWidth: 4 },
         text: "Hands"

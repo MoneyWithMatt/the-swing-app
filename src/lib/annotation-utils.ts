@@ -1,6 +1,10 @@
 import type { Annotation, AnnotationStyle, AnnotationType, NormalizedGeometry, Point } from "./types";
 
+export const PERSISTENT_ANNOTATION_END = 60 * 60;
+const FRAME_VISIBILITY_GRACE_SECONDS = 0.12;
+
 export const TOOL_STYLES: Record<AnnotationType, AnnotationStyle> = {
+  draw: { stroke: "#f2b84b", strokeWidth: 5 },
   line: { stroke: "#f2b84b", strokeWidth: 5 },
   arrow: { stroke: "#f2b84b", strokeWidth: 5 },
   circle: { stroke: "#5ba86c", fill: "rgba(91, 168, 108, 0.12)", strokeWidth: 4 },
@@ -26,6 +30,31 @@ export function denormalizePoint(point: Point, width: number, height: number): P
   };
 }
 
+export function colorWithAlpha(hex: string, alpha: number) {
+  const clean = hex.replace("#", "");
+  const value = Number.parseInt(clean.length === 3 ? clean.split("").map((char) => char + char).join("") : clean, 16);
+  if (!Number.isFinite(value)) {
+    return `rgba(91, 168, 108, ${alpha})`;
+  }
+
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+export function styleForTool(type: AnnotationType, color: string, strokeWidth: number): AnnotationStyle {
+  if (type === "text") {
+    return { stroke: color, fill: "#fbfcf8", strokeWidth: 2 };
+  }
+
+  if (type === "circle") {
+    return { stroke: color, fill: colorWithAlpha(color, 0.14), strokeWidth };
+  }
+
+  return { stroke: color, strokeWidth };
+}
+
 export function geometryFromPoints(type: AnnotationType, start: Point, end: Point): NormalizedGeometry {
   if (type === "angle") {
     return {
@@ -47,7 +76,7 @@ export function geometryFromPoints(type: AnnotationType, start: Point, end: Poin
 }
 
 export function annotationVisibleAt(annotation: Annotation, time: number) {
-  return time >= annotation.timeStart && time <= annotation.timeEnd;
+  return time + FRAME_VISIBILITY_GRACE_SECONDS >= annotation.timeStart && time <= annotation.timeEnd;
 }
 
 export function roundedTime(seconds: number) {

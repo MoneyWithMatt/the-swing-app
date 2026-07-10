@@ -22,6 +22,7 @@ export function CoachPreviewPage({ id }: { id: string }) {
   const annotations = submission ? getAnnotationsForSubmission(submission.id) : [];
   const analysis =
     submission && (getAnalysisForSubmission(submission.id) ?? createDraftAnalysis(submission.id, submission.coachId));
+  const recordingVideo = analysis?.narrationAssetId ? getVideo(analysis.narrationAssetId) : undefined;
 
   function handleSend() {
     if (!submission) {
@@ -74,7 +75,7 @@ export function CoachPreviewPage({ id }: { id: string }) {
         <SectionHeading title="Question" detail={submission.question} />
       </section>
 
-      <AnalysisPlayer video={video} analysis={analysis} annotations={annotations} />
+      <AnalysisPlayer video={video} recordingVideo={recordingVideo} analysis={analysis} annotations={annotations} />
     </PageShell>
   );
 }
