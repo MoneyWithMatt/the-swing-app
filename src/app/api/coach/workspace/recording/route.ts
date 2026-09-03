@@ -2,9 +2,9 @@ import { handleCoachRecording } from "@/lib/server/coach-recordings";
 
 export async function POST(request: Request) {
   return handleCoachRecording(request, {
-    idField: "submissionId",
-    table: "pilot_submissions",
-    storageFolder: "results",
-    notFoundMessage: "Submission not found for this coach."
+    idField: "analysisId",
+    table: "coach_analyses",
+    storageFolder: "workspace-results",
+    notFoundMessage: "Private analysis not found for this coach."
   });
 }

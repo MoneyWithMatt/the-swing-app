@@ -38,10 +38,10 @@ export default async function PilotCoachPage({ searchParams }: { searchParams: P
 
   return (
     <PageShell>
-      <TopBar eyebrow="Coach account" title={`${profile.display_name}'s live queue`} actions={<><LinkButton href="/coach/profile" variant="secondary">Edit profile</LinkButton><form action={logout}><Button variant="secondary">Log out</Button></form></>} />
+      <TopBar eyebrow="Coach account" title="Reviews" actions={<><LinkButton href="/coach/workspace">Coach Workspace</LinkButton><LinkButton href="/coach/profile" variant="secondary">Edit profile</LinkButton><form action={logout}><Button variant="secondary">Log out</Button></form></>} />
       {query.sent === "success" ? <div className="mb-5 rounded-lg border border-moss/30 bg-moss/10 p-4 text-sm leading-6 text-ink/70"><p className="font-bold text-moss">Analysis sent successfully.</p><p>The golfer can now view and download your response.</p></div> : null}
       <section className="rounded-lg border border-ink/10 bg-white">
-        <div className="border-b border-ink/10 p-4"><SectionHeading title="Real pilot submissions" detail="Newest requests appear first." /></div>
+        <div className="border-b border-ink/10 p-4"><SectionHeading title={`${profile.display_name}'s golfer reviews`} detail="Newest paid review requests appear first." /></div>
         <div className="divide-y divide-ink/10">
           {submissions.length ? submissions.map((submission) => (
             <article key={submission.id} className="grid gap-4 p-4 lg:grid-cols-[9rem_minmax(0,1fr)_10rem_8rem]">

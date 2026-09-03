@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Eraser, Maximize2, Mic, Minus, Pause, Pencil, Play, RotateCcw, Square, Trash2, Undo2 } from "lucide-react";
-import { Button, SectionHeading } from "@/components/ui/primitives";
+import { ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Eraser, Maximize2, Mic, Minus, MonitorUp, Pause, Pencil, Play, RotateCcw, Shrink, Square, Trash2, Undo2 } from "lucide-react";
+import { Button, cn, SectionHeading } from "@/components/ui/primitives";
 
 type Point = { x: number; y: number };
 type FrameRect = { x: number; y: number; width: number; height: number };
@@ -101,7 +101,10 @@ function drawShapes(context: CanvasRenderingContext2D, shapes: ReviewShape[], fr
   }
 }
 
-export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingUrl = "", onRecordingSaved, onRecordingDeleted }: { videoUrl: string; submissionId: string; initialRecordingUrl?: string; onRecordingSaved?: (url: string) => void; onRecordingDeleted?: () => void }) {
+export function PilotVideoReviewTool({ videoUrl, reviewId, submissionId, recordingApiUrl = "/api/pilot/coach/recording", recordingIdField = "submissionId", initialRecordingUrl = "", onRecordingSaved, onRecordingDeleted }: { videoUrl: string; reviewId?: string; submissionId?: string; recordingApiUrl?: string; recordingIdField?: "submissionId" | "analysisId"; initialRecordingUrl?: string; onRecordingSaved?: (url: string) => void; onRecordingDeleted?: () => void }) {
+  const resourceId = reviewId ?? submissionId;
+  if (!resourceId) throw new Error("A review id is required.");
+  const presentationRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -130,8 +133,27 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
   const [status, setStatus] = useState("");
   const [viewTransform, setViewTransform] = useState<ViewTransform>({ scale: 1, x: 0, y: 0 });
   const [toolbarOpen, setToolbarOpen] = useState(true);
+  const [presentationMode, setPresentationMode] = useState(false);
 
   useEffect(() => { viewTransformRef.current = viewTransform; }, [viewTransform]);
+
+  useEffect(() => {
+    const syncFullscreen = () => {
+      if (!document.fullscreenElement && presentationMode) setPresentationMode(false);
+    };
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, [presentationMode]);
+
+  async function togglePresentationMode() {
+    if (presentationMode) {
+      if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
+      setPresentationMode(false);
+      return;
+    }
+    setPresentationMode(true);
+    await presentationRef.current?.requestFullscreen?.().catch(() => undefined);
+  }
 
   useEffect(() => {
     shapesRef.current = shapes;
@@ -267,10 +289,10 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
   async function uploadRecording(blob: Blob, mimeType: string) {
     const uploadMimeType = mimeType.split(";", 1)[0] || "video/webm";
     const extension = uploadMimeType === "video/mp4" ? "mp4" : "webm";
-    const preparedResponse = await fetch("/api/pilot/coach/recording", {
+    const preparedResponse = await fetch(recordingApiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "prepare", submissionId, mimeType: uploadMimeType, sizeBytes: blob.size, extension })
+      body: JSON.stringify({ action: "prepare", [recordingIdField]: resourceId, mimeType: uploadMimeType, sizeBytes: blob.size, extension })
     });
     const prepared = (await preparedResponse.json()) as { uploadUrl?: string; recordingPath?: string; error?: string };
     if (!preparedResponse.ok || !prepared.uploadUrl || !prepared.recordingPath) throw new Error(prepared.error || "Recording upload could not start.");
@@ -285,10 +307,10 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
       const detail = await uploadResponse.text();
       throw new Error(detail || "Recording upload did not complete.");
     }
-    const confirmResponse = await fetch("/api/pilot/coach/recording", {
+    const confirmResponse = await fetch(recordingApiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "confirm", submissionId, recordingPath: prepared.recordingPath })
+      body: JSON.stringify({ action: "confirm", [recordingIdField]: resourceId, recordingPath: prepared.recordingPath })
     });
     const confirmation = (await confirmResponse.json()) as { error?: string };
     if (!confirmResponse.ok) throw new Error(confirmation.error || "Recording could not be confirmed.");
@@ -353,7 +375,7 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
         try {
           await uploadRecording(blob, type);
           onRecordingSaved?.(nextRecordingUrl);
-          setStatus("Recording saved and ready to send.");
+          setStatus("Recording saved.");
         } catch (error) {
           setStatus(error instanceof Error ? error.message : "Recording could not be saved.");
         } finally {
@@ -378,10 +400,10 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
     if (!window.confirm("Delete this recording so you can record it again?")) return;
     setSaving(true); setStatus("Deleting recording...");
     try {
-      const response = await fetch("/api/pilot/coach/recording", {
+      const response = await fetch(recordingApiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "delete", submissionId })
+        body: JSON.stringify({ action: "delete", [recordingIdField]: resourceId })
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(result.error || "Recording could not be deleted.");
@@ -395,9 +417,12 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
   }
 
   return (
-    <section className="rounded-lg border border-ink/10 bg-white p-4">
-      <SectionHeading title="Video review" detail="Drawings stay visible throughout the recording." />
-      <div ref={stageRef} className="relative mx-auto aspect-[9/16] w-full max-w-md overflow-hidden rounded-lg bg-black">
+    <section ref={presentationRef} className={cn("rounded-lg border border-ink/10 bg-white p-4", presentationMode && "fixed inset-0 z-50 flex flex-col overflow-auto rounded-none border-0 bg-[#101612] p-3 text-white sm:p-4")}>
+      <div className={cn("flex items-start justify-between gap-3", presentationMode && "mx-auto w-full max-w-6xl")}>
+        {!presentationMode ? <SectionHeading title="Video review" detail="Drawings stay visible throughout the recording." /> : <div><p className="text-xs font-bold uppercase tracking-wider text-fairway">Presentation Mode</p><p className="text-sm text-white/70">Playback and drawing controls stay in place while you screen-share.</p></div>}
+        <Button type="button" variant={presentationMode ? "secondary" : "ghost"} onClick={togglePresentationMode}>{presentationMode ? <Shrink size={17} aria-hidden /> : <MonitorUp size={17} aria-hidden />}{presentationMode ? "Exit" : "Presentation Mode"}</Button>
+      </div>
+      <div ref={stageRef} className={cn("relative mx-auto aspect-[9/16] w-full max-w-md overflow-hidden rounded-lg bg-black", presentationMode && "mt-3 h-[calc(100vh-13.5rem)] min-h-[24rem] w-auto max-w-full shrink-0")}>
         <div className="absolute inset-0 will-change-transform" style={{ transform: `translate(${viewTransform.x}px, ${viewTransform.y}px) scale(${viewTransform.scale})` }}>
         <video ref={videoRef} src={videoUrl} crossOrigin="anonymous" playsInline className="h-full w-full object-contain" onLoadedMetadata={(event) => { setVideoDimensions({ width: event.currentTarget.videoWidth, height: event.currentTarget.videoHeight }); setDuration(event.currentTarget.duration || 0); }} onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onSeeked={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
         <canvas
@@ -438,9 +463,9 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
           </div>
         ) : null}
       </div>
-      <p className="mt-2 text-xs font-semibold text-ink/55">Pinch with two fingers to zoom. Move both fingers together to reposition the view. Zoom is included in the recorded response.</p>
-      <div className="mt-3 rounded-lg border border-moss/15 bg-gradient-to-r from-moss/5 to-white px-4 py-3 shadow-sm">
-        <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-ink/55">
+      {!presentationMode ? <p className="mt-2 text-xs font-semibold text-ink/55">Pinch with two fingers to zoom. Move both fingers together to reposition the view. Zoom is included in the recorded response.</p> : null}
+      <div className={cn("mt-3 rounded-lg border border-moss/15 bg-gradient-to-r from-moss/5 to-white px-4 py-3 shadow-sm", presentationMode && "mx-auto w-full max-w-4xl border-white/15 bg-white/10 text-white")}>
+        <div className={cn("mb-2 flex items-center justify-between gap-3 text-xs font-bold text-ink/55", presentationMode && "text-white/75")}>
           <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
           <span>Frame {Math.round(currentTime * frameRate).toLocaleString()}</span>
         </div>
@@ -462,8 +487,8 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
           }}
         />
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-2 rounded-md border border-ink/10 bg-paper px-3 text-sm font-bold text-ink/70">
+      <div className={cn("mt-3 flex flex-wrap items-center gap-2", presentationMode && "mx-auto w-full max-w-4xl justify-center")}>
+        <label className={cn("flex items-center gap-2 rounded-md border border-ink/10 bg-paper px-3 text-sm font-bold text-ink/70", presentationMode && "border-white/20 bg-white/10 text-white")}>
           Video FPS
           <select className="bg-transparent py-2" value={frameRate} onChange={(event) => setFrameRate(Number(event.target.value))}>
             {[30, 60, 120, 240].map((fps) => <option key={fps} value={fps}>{fps}</option>)}
@@ -478,9 +503,9 @@ export function PilotVideoReviewTool({ videoUrl, submissionId, initialRecordingU
           <Button type="button" disabled={saving} onClick={startRecording}><Mic size={16} aria-hidden />Record with microphone</Button>
         )}
       </div>
-      {status ? <p className="mt-3 text-sm font-bold text-moss">{status}</p> : null}
+      {status ? <p className={cn("mt-3 text-sm font-bold text-moss", presentationMode && "text-center text-fairway")}>{status}</p> : null}
       {activeTool === "eraser" ? <p className="mt-2 text-xs font-semibold text-ink/55">Tap any line, circle, arrow or freehand drawing to remove it.</p> : null}
-      {recordingUrl ? <div className="mt-4 rounded-lg border border-ink/10 bg-paper p-3"><video className="mx-auto aspect-[9/16] w-full max-w-sm rounded-lg bg-black object-contain" src={recordingUrl} controls playsInline /><Button type="button" className="mt-3" variant="danger" disabled={saving || recording} onClick={deleteRecording}><Trash2 size={16} aria-hidden />Delete recording and redo</Button></div> : null}
+      {recordingUrl && !presentationMode ? <div className="mt-4 rounded-lg border border-ink/10 bg-paper p-3"><video className="mx-auto aspect-[9/16] w-full max-w-sm rounded-lg bg-black object-contain" src={recordingUrl} controls playsInline /><div className="mt-3 flex flex-wrap gap-2"><a className="focus-ring inline-flex min-h-11 items-center justify-center rounded-md border border-ink/15 bg-white px-4 text-sm font-semibold text-ink hover:bg-mist" href={recordingUrl} download>Download recording</a><Button type="button" variant="danger" disabled={saving || recording} onClick={deleteRecording}><Trash2 size={16} aria-hidden />Delete recording and redo</Button></div></div> : null}
     </section>
   );
 }

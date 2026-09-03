@@ -44,7 +44,7 @@ export default async function PilotSubmissionPage({ params }: { params: Promise<
 
   return (
     <PageShell>
-      <TopBar eyebrow="Coach pilot" title={`${submission.golfer_name}'s swing`} actions={<LinkButton href="/coach/pilot" variant="secondary">Queue</LinkButton>} />
+      <TopBar eyebrow="Reviews" title={`${submission.golfer_name}'s swing`} actions={<><LinkButton href="/coach/workspace" variant="secondary">Coach Workspace</LinkButton><LinkButton href="/coach/pilot" variant="secondary">Reviews</LinkButton></>} />
       <section className="mb-5 rounded-lg border border-ink/10 bg-white p-4">
         <div className="mb-3 flex flex-wrap gap-2"><StatusBadge status={submission.status} /><span className="text-sm font-bold text-ink/55">{submission.payment_status}</span></div>
         <SectionHeading title="Golfer's question" detail={submission.question} />
