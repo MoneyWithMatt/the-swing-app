@@ -40,9 +40,19 @@ export async function prepareVideoFile(file: File): Promise<PreparedVideo> {
 export function getVideoDuration(url: string) {
   return new Promise<number | undefined>((resolve) => {
     const video = document.createElement("video");
+    let settled = false;
+    const finish = (duration?: number) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      video.removeAttribute("src");
+      video.load();
+      resolve(duration);
+    };
+    const timeout = window.setTimeout(() => finish(), 4000);
     video.preload = "metadata";
-    video.onloadedmetadata = () => resolve(video.duration);
-    video.onerror = () => resolve(undefined);
+    video.onloadedmetadata = () => finish(Number.isFinite(video.duration) ? video.duration : undefined);
+    video.onerror = () => finish();
     video.src = url;
   });
 }

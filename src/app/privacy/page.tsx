@@ -1,0 +1,19 @@
+import { LinkButton, PageShell, TopBar } from "@/components/ui/primitives";
+
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => <section><h2 className="text-xl font-bold text-ink">{title}</h2><div className="mt-2 space-y-2 leading-7 text-ink/70">{children}</div></section>;
+
+export default function PrivacyPage() {
+  return <PageShell><TopBar eyebrow="Legal" title="Privacy notice" actions={<LinkButton href="/" variant="secondary">Back</LinkButton>} />
+    <article className="mx-auto max-w-3xl space-y-7 rounded-lg border border-ink/10 bg-white p-6 shadow-sm">
+      <p className="text-sm font-bold text-ink/50">Last updated: 27 August 2026</p>
+      <Section title="Who is responsible"><p>The Swing App is operated by Matt Robertson, who is the controller of the personal information described here. Privacy questions and rights requests can be sent to <a className="font-bold text-moss underline" href="mailto:moneywithmattuk@gmail.com">moneywithmattuk@gmail.com</a>.</p></Section>
+      <Section title="What we collect"><p>We collect your name, email address, account and security information; your selected coach; swing video, question and coaching feedback; transaction references and status; and technical security logs. A coach profile can also contain a public name, photo and description.</p></Section>
+      <Section title="Why we use it"><p>We use account, video, coaching and payment information to provide the service and take steps you request before entering a contract. We use limited technical logs and records for our legitimate interests in securing, troubleshooting and improving the service. We retain accounting information where the law requires it. We do not sell personal information or use it for automated decisions.</p></Section>
+      <Section title="Who receives it"><p>Your chosen coach can view the swing, question and account name needed to provide feedback. Stripe processes checkout information; Supabase hosts authentication, database records and temporary videos; Vercel hosts the app; and Resend may deliver service emails. Each provider acts under its own privacy and security terms and may use approved safeguards when information is processed outside the UK.</p></Section>
+      <Section title="How long we keep it"><p>Original swing videos are deleted within 7 days, or sooner after the coach sends the analysis. Coach response videos are deleted after 14 days. Download any response you want to keep. Account, written coaching and transaction history stay while the account is active. If you ask us to delete the account, we erase or anonymise information unless it must be retained for legal, tax, fraud-prevention or dispute purposes.</p></Section>
+      <Section title="Your choices and rights"><p>You may ask for access, correction, deletion, restriction, objection or a portable copy of your information. You can download a machine-readable copy from your Account page and request deletion there. We normally respond within one month. Where processing relies on consent, you may withdraw it without affecting earlier processing.</p></Section>
+      <Section title="Security and complaints"><p>Videos are kept in private storage and opened using short-lived links. Access is restricted by account role and selected coach. No internet service can promise absolute security; please use a unique password and contact us promptly if you suspect misuse.</p><p>You can complain to the UK Information Commissioner’s Office at <a className="font-bold text-moss underline" href="https://ico.org.uk/make-a-complaint/" rel="noreferrer">ico.org.uk</a>, though we would appreciate the opportunity to resolve the issue first.</p></Section>
+      <Section title="Children"><p>The current pilot is for people aged 18 or over. We will add a separate parental-consent process before offering accounts to children.</p></Section>
+    </article>
+  </PageShell>;
+}

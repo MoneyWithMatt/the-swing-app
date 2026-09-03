@@ -9,6 +9,8 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.112.4",
     "konva": "latest",
     "lucide-react": "latest",
     "next": "latest",

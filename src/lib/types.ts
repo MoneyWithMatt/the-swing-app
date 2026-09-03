@@ -1,4 +1,4 @@
-export type Sport = "golf" | "disc_golf";
+export type Sport = "golf";
 
 export type PaymentStatus = "mock_authorized" | "captured" | "refunded";
 

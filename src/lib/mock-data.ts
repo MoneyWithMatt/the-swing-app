@@ -52,7 +52,7 @@ export function createDefaultState(): AppState {
         id: MATT_COACH_ID,
         name: "Matt",
         bio: "Beginner-friendly golf coach focused on simple fixes you can take straight to the range.",
-        sports: ["golf", "disc_golf"],
+        sports: ["golf"],
         pricePence: 500,
         isActive: true,
         avatarUrl: "/sample-images/golf-coach-range.png"

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,
@@ -81,11 +82,14 @@ export function TopBar({
 }) {
   return (
     <header className="mb-6 flex flex-col gap-4 border-b border-ink/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        {eyebrow ? (
-          <p className="mb-2 text-xs font-bold uppercase text-moss">{eyebrow}</p>
-        ) : null}
-        <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">{title}</h1>
+      <div className="flex items-center gap-3">
+        <Image src="/brand/swing-app-icon.png" alt="The Swing App" width={52} height={52} priority className="h-[52px] w-[52px] shrink-0 rounded-xl shadow-sm" />
+        <div>
+          {eyebrow ? (
+            <p className="mb-1 text-xs font-bold uppercase text-moss">{eyebrow}</p>
+          ) : null}
+          <h1 className="text-3xl font-bold leading-tight text-ink sm:text-4xl">{title}</h1>
+        </div>
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </header>

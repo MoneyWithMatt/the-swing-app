@@ -21,6 +21,7 @@ export function CoachDashboardPage() {
         actions={
           <>
             <LinkButton href="/" variant="secondary">Home</LinkButton>
+            <LinkButton href="/coach/pilot" variant="secondary">Live pilot queue</LinkButton>
             <LinkButton href="/new" variant="ghost">New golfer request</LinkButton>
           </>
         }
