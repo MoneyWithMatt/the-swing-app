@@ -8,6 +8,7 @@ export const TOOL_STYLES: Record<AnnotationType, AnnotationStyle> = {
   line: { stroke: "#f2b84b", strokeWidth: 5 },
   arrow: { stroke: "#f2b84b", strokeWidth: 5 },
   circle: { stroke: "#5ba86c", fill: "rgba(91, 168, 108, 0.12)", strokeWidth: 4 },
+  rectangle: { stroke: "#5ba86c", fill: "rgba(91, 168, 108, 0.12)", strokeWidth: 4 },
   angle: { stroke: "#c96f4a", strokeWidth: 5 },
   text: { stroke: "#17211b", fill: "#fbfcf8", strokeWidth: 2 }
 };

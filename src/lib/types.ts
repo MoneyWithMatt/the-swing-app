@@ -6,7 +6,7 @@ export type SubmissionStatus = "submitted" | "in_review" | "ready";
 
 export type VideoStorageKind = "remote" | "local_data_url" | "session_object_url";
 
-export type AnnotationType = "draw" | "line" | "arrow" | "circle" | "angle" | "text";
+export type AnnotationType = "draw" | "line" | "arrow" | "circle" | "rectangle" | "angle" | "text";
 
 export type AnalysisStatus = "draft" | "sent";
 

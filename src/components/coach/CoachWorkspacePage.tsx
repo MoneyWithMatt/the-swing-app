@@ -64,6 +64,8 @@ export function CoachWorkspacePage({ id }: { id: string }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [savedLabel, setSavedLabel] = useState("");
+  const [annotationUndoStack, setAnnotationUndoStack] = useState<Array<{ type: "add" | "delete"; annotation: Annotation }>>([]);
+  const [annotationRedoStack, setAnnotationRedoStack] = useState<Array<{ type: "add" | "delete"; annotation: Annotation }>>([]);
   const recordingVideo = analysis?.narrationAssetId ? getVideo(analysis.narrationAssetId) : undefined;
 
   useEffect(() => {
@@ -115,6 +117,9 @@ export function CoachWorkspacePage({ id }: { id: string }) {
 
   function handleAddAnnotation(annotation: Omit<Annotation, "id">) {
     const annotationId = addAnnotation(annotation);
+    const createdAnnotation = { ...annotation, id: annotationId } as Annotation;
+    setAnnotationUndoStack((current) => [...current, { type: "add", annotation: createdAnnotation }]);
+    setAnnotationRedoStack([]);
     setAnalysis((current) => {
       if (!current) {
         return current;
@@ -135,6 +140,78 @@ export function CoachWorkspacePage({ id }: { id: string }) {
             : chapter
         )
       };
+      upsertAnalysis(next);
+      return next;
+    });
+  }
+
+  function handleDeleteAnnotation(annotationId: string) {
+    const target = annotations.find((annotation) => annotation.id === annotationId);
+    if (!target) {
+      return;
+    }
+
+    deleteAnnotation(annotationId);
+    setAnnotationUndoStack((current) => [...current, { type: "delete", annotation: target }]);
+    setAnnotationRedoStack([]);
+  }
+
+  function handleUndoAnnotation() {
+    const lastAction = annotationUndoStack[annotationUndoStack.length - 1];
+    if (!lastAction) {
+      return;
+    }
+
+    setAnnotationUndoStack(annotationUndoStack.slice(0, -1));
+    setAnnotationRedoStack((current) => [...current, lastAction]);
+
+    if (lastAction.type === "add") {
+      deleteAnnotation(lastAction.annotation.id);
+      return;
+    }
+
+    const { id: _id, ...rest } = lastAction.annotation;
+    addAnnotation(rest);
+  }
+
+  function handleRedoAnnotation() {
+    const lastAction = annotationRedoStack[annotationRedoStack.length - 1];
+    if (!lastAction) {
+      return;
+    }
+
+    setAnnotationRedoStack(annotationRedoStack.slice(0, -1));
+    setAnnotationUndoStack((current) => [...current, lastAction]);
+
+    if (lastAction.type === "add") {
+      const { id: _id, ...rest } = lastAction.annotation;
+      addAnnotation(rest);
+      return;
+    }
+
+    deleteAnnotation(lastAction.annotation.id);
+  }
+
+  function handleAddBookmark(bookmark: { title: string; time: number }) {
+    setAnalysis((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const nextChapter: AnalysisChapter = {
+        id: `chapter_${Date.now().toString(36)}`,
+        title: bookmark.title,
+        body: `Bookmark at ${formatDuration(bookmark.time)}`,
+        startTime: roundedTime(bookmark.time),
+        endTime: roundedTime(bookmark.time + 1),
+        annotationIds: []
+      };
+
+      const next = {
+        ...current,
+        chapters: [...current.chapters, nextChapter]
+      };
+
       upsertAnalysis(next);
       return next;
     });
@@ -218,6 +295,22 @@ export function CoachWorkspacePage({ id }: { id: string }) {
         <section className="space-y-4">
           <div className="rounded-lg border border-ink/10 bg-white p-4">
             <div className="mb-4 grid gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" size="sm" variant="secondary" onClick={handleUndoAnnotation} disabled={!annotationUndoStack.length}>
+                  Undo
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={handleRedoAnnotation} disabled={!annotationRedoStack.length}>
+                  Redo
+                </Button>
+                <Button type="button" size="sm" variant="secondary" onClick={() => {
+                  const latest = sortedAnnotations[sortedAnnotations.length - 1];
+                  if (latest) {
+                    handleDeleteAnnotation(latest.id);
+                  }
+                }}>
+                  Delete annotations
+                </Button>
+              </div>
               <AnnotationToolbar activeTool={activeTool} onSelectTool={setActiveTool} />
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-ink/10 bg-paper px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -260,6 +353,16 @@ export function CoachWorkspacePage({ id }: { id: string }) {
               annotationStrokeWidth={activeStrokeWidth}
               onAddAnnotation={handleAddAnnotation}
               onTimeChange={(time) => setCurrentTime(roundedTime(time))}
+              chapters={analysis.chapters}
+              onAddBookmark={handleAddBookmark}
+              onUndo={handleUndoAnnotation}
+              onRedo={handleRedoAnnotation}
+              onDeleteLatest={() => {
+                const latest = sortedAnnotations[sortedAnnotations.length - 1];
+                if (latest) {
+                  handleDeleteAnnotation(latest.id);
+                }
+              }}
             />
           </div>
 
@@ -287,7 +390,7 @@ export function CoachWorkspacePage({ id }: { id: string }) {
                       size="icon"
                       title="Delete annotation"
                       aria-label="Delete annotation"
-                      onClick={() => deleteAnnotation(annotation.id)}
+                      onClick={() => handleDeleteAnnotation(annotation.id)}
                     >
                       <Trash2 size={16} aria-hidden />
                     </Button>

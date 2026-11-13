@@ -16,6 +16,8 @@ test("golfer submits a swing and Matt sends the analysis", async ({ page }) => {
   await page.getByTestId("open-coach-workspace-from-status").click();
 
   await expect(page.getByRole("heading", { name: /Alex Taylor's swing/ })).toBeVisible();
+  await expect(page.getByLabel("Playback speed")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add bookmark" })).toBeVisible();
   await page.getByTestId("preview-analysis").click();
   await expect(page.getByRole("heading", { name: "Golfer-facing analysis" })).toBeVisible();
 

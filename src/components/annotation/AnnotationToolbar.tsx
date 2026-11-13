@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentType } from "react";
-import { Circle, MoveRight, Pencil, PenLine, Ruler, Type } from "lucide-react";
+import { Circle, MoveRight, Pencil, PenLine, Ruler, Square, Type } from "lucide-react";
 import type { AnnotationType } from "@/lib/types";
 import { Button, cn } from "@/components/ui/primitives";
 
@@ -14,6 +14,7 @@ const TOOLS: Array<{
   { type: "line", label: "Line", icon: PenLine },
   { type: "arrow", label: "Arrow", icon: MoveRight },
   { type: "circle", label: "Circle", icon: Circle },
+  { type: "rectangle", label: "Rectangle", icon: Square },
   { type: "angle", label: "Angle", icon: Ruler },
   { type: "text", label: "Text", icon: Type }
 ];

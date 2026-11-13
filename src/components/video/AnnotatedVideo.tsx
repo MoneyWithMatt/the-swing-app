@@ -2,7 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Arrow, Ellipse, Group, Label, Layer, Line, Rect, Stage, Tag, Text } from "react-konva";
-import { Pause, Play } from "lucide-react";
+import {
+  BookmarkPlus,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  Redo2,
+  RotateCcw,
+  RotateCw,
+  SkipBack,
+  SkipForward,
+  Trash2,
+  Undo2,
+  ZoomIn,
+  ZoomOut
+} from "lucide-react";
 import {
   annotationVisibleAt,
   denormalizePoint,
@@ -33,6 +48,11 @@ type AnnotatedVideoProps = {
   seekRequest?: SeekRequest;
   readOnly?: boolean;
   showAllAnnotations?: boolean;
+  chapters?: Array<{ id: string; title: string; startTime: number; endTime: number }>;
+  onAddBookmark?: (bookmark: { title: string; time: number }) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onDeleteLatest?: () => void;
   className?: string;
 };
 
@@ -142,6 +162,25 @@ function AnnotationShape({ annotation, size }: { annotation: Annotation; size: S
     );
   }
 
+  if (annotation.type === "rectangle") {
+    const left = Math.min(first.x, second.x);
+    const top = Math.min(first.y, second.y);
+    const width = Math.max(8, Math.abs(second.x - first.x));
+    const height = Math.max(8, Math.abs(second.y - first.y));
+
+    return (
+      <Rect
+        x={left}
+        y={top}
+        width={width}
+        height={height}
+        stroke={stroke}
+        fill={annotation.style.fill}
+        strokeWidth={strokeWidth}
+      />
+    );
+  }
+
   if (annotation.type === "angle") {
     return (
       <Group>
@@ -204,6 +243,11 @@ export function AnnotatedVideo({
   seekRequest,
   readOnly = false,
   showAllAnnotations = false,
+  chapters = [],
+  onAddBookmark,
+  onUndo,
+  onRedo,
+  onDeleteLatest,
   className
 }: AnnotatedVideoProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -214,6 +258,9 @@ export function AnnotatedVideo({
   const [playing, setPlaying] = useState(false);
   const [draft, setDraft] = useState<DraftAnnotation | null>(null);
   const [dragStart, setDragStart] = useState<Point | null>(null);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     const element = wrapperRef.current;
@@ -236,6 +283,21 @@ export function AnnotatedVideo({
       videoRef.current.play().catch(() => undefined);
     }
   }, [seekRequest]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
 
   const visibleAnnotations = useMemo(() => {
     if (showAllAnnotations) {
@@ -269,6 +331,46 @@ export function AnnotatedVideo({
     } else {
       video.pause();
     }
+  }
+
+  function seekToTime(nextTime: number) {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    const clampedTime = Math.max(0, Math.min(nextTime, duration || nextTime));
+    video.currentTime = clampedTime;
+    setCurrentTime(clampedTime);
+    onTimeChange?.(clampedTime);
+  }
+
+  function moveFrame(direction: -1 | 1) {
+    const frameStep = 1 / 30;
+    seekToTime(currentTime + direction * frameStep);
+  }
+
+  function toggleFullscreen() {
+    const element = wrapperRef.current;
+    if (!element) {
+      return;
+    }
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => undefined);
+      return;
+    }
+
+    element.requestFullscreen().catch(() => undefined);
+  }
+
+  function handleBookmark() {
+    const title = window.prompt("Bookmark title", "Key position")?.trim();
+    if (!title) {
+      return;
+    }
+
+    onAddBookmark?.({ title, time: currentTime });
   }
 
   function handlePointerDown(event: StagePointerEvent) {
@@ -382,49 +484,123 @@ export function AnnotatedVideo({
     setDraft(null);
   }
 
+  const timelineMarkers = useMemo(
+    () => [
+      ...chapters.map((chapter) => ({ id: chapter.id, title: chapter.title, time: chapter.startTime, kind: "chapter" as const })),
+      ...annotations.map((annotation) => ({ id: annotation.id, title: annotation.type, time: annotation.timeStart, kind: "annotation" as const }))
+    ],
+    [annotations, chapters]
+  );
+
   return (
     <div className={cn("overflow-hidden rounded-lg border border-ink/10 bg-ink shadow-soft", className)}>
-      <div ref={wrapperRef} className="relative aspect-video w-full bg-black">
-        <video
-          ref={videoRef}
-          className="h-full w-full object-contain"
-          src={videoUrl}
-          poster={posterUrl}
-          playsInline
-          controls={false}
-          crossOrigin="anonymous"
-          onTimeUpdate={handleTimeUpdate}
-          onSeeking={handleTimeUpdate}
-          onSeeked={handleTimeUpdate}
-          onLoadedMetadata={() => setDuration(videoRef.current?.duration ?? 0)}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-        />
-        <Stage
-          width={size.width}
-          height={size.height}
-          className="absolute inset-0"
-          onMouseDown={handlePointerDown}
-          onMouseMove={handlePointerMove}
-          onMouseUp={handlePointerUp}
-          onTouchStart={handlePointerDown}
-          onTouchMove={handlePointerMove}
-          onTouchEnd={handlePointerUp}
+      <div ref={wrapperRef} className="relative aspect-video w-full overflow-hidden bg-black">
+        <div
+          className="absolute inset-0 overflow-hidden"
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: "center center",
+            width: `${100 / zoom}%`,
+            height: `${100 / zoom}%`,
+            left: `${(100 - 100 / zoom) / 2}%`,
+            top: `${(100 - 100 / zoom) / 2}%`
+          }}
         >
-          <Layer listening={!readOnly}>
-            <Rect x={0} y={0} width={size.width} height={size.height} fill="rgba(0,0,0,0)" />
-            {visibleAnnotations.map((annotation) => (
-              <AnnotationShape key={annotation.id} annotation={annotation} size={size} />
-            ))}
-            {draft ? <AnnotationShape annotation={{ ...draft, id: "draft" }} size={size} /> : null}
-          </Layer>
-        </Stage>
+          <video
+            ref={videoRef}
+            className="h-full w-full object-contain"
+            src={videoUrl}
+            poster={posterUrl}
+            playsInline
+            controls={false}
+            crossOrigin="anonymous"
+            onTimeUpdate={handleTimeUpdate}
+            onSeeking={handleTimeUpdate}
+            onSeeked={handleTimeUpdate}
+            onLoadedMetadata={() => setDuration(videoRef.current?.duration ?? 0)}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+          />
+          <Stage
+            width={size.width}
+            height={size.height}
+            className="absolute inset-0"
+            onMouseDown={handlePointerDown}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onTouchStart={handlePointerDown}
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerUp}
+          >
+            <Layer listening={!readOnly}>
+              <Rect x={0} y={0} width={size.width} height={size.height} fill="rgba(0,0,0,0)" />
+              {visibleAnnotations.map((annotation) => (
+                <AnnotationShape key={annotation.id} annotation={annotation} size={size} />
+              ))}
+              {draft ? <AnnotationShape annotation={{ ...draft, id: "draft" }} size={size} /> : null}
+            </Layer>
+          </Stage>
+        </div>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-3 py-3">
-        <Button type="button" size="sm" variant="secondary" onClick={togglePlayback}>
-          {playing ? <Pause size={16} aria-hidden /> : <Play size={16} aria-hidden />}
-          {playing ? "Pause" : "Play"}
-        </Button>
+      <div className="space-y-3 bg-white px-3 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" variant="secondary" onClick={togglePlayback}>
+            {playing ? <Pause size={16} aria-hidden /> : <Play size={16} aria-hidden />}
+            {playing ? "Pause" : "Play"}
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => moveFrame(-1)}>
+            <SkipBack size={16} aria-hidden />
+            -1f
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => moveFrame(1)}>
+            <SkipForward size={16} aria-hidden />
+            +1f
+          </Button>
+          <label className="flex items-center gap-2 rounded-md border border-ink/10 bg-paper px-2 py-1 text-xs font-bold text-ink/70">
+            <span>Speed</span>
+            <select
+              aria-label="Playback speed"
+              className="bg-transparent text-sm font-semibold text-ink"
+              value={playbackRate}
+              onChange={(event) => setPlaybackRate(Number(event.target.value))}
+            >
+              <option value={0.5}>0.5x</option>
+              <option value={0.75}>0.75x</option>
+              <option value={1}>1x</option>
+              <option value={1.25}>1.25x</option>
+              <option value={1.5}>1.5x</option>
+              <option value={2}>2x</option>
+            </select>
+          </label>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))}>
+            <ZoomOut size={16} aria-hidden />
+            Zoom-
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={() => setZoom((value) => Math.min(2.5, Number((value + 0.25).toFixed(2))))}>
+            <ZoomIn size={16} aria-hidden />
+            Zoom+
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={toggleFullscreen}>
+            {isFullscreen ? <Minimize2 size={16} aria-hidden /> : <Maximize2 size={16} aria-hidden />}
+            {isFullscreen ? "Exit full" : "Full"}
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={handleBookmark}>
+            <BookmarkPlus size={16} aria-hidden />
+            Add bookmark
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={onUndo} disabled={!onUndo}>
+            <Undo2 size={16} aria-hidden />
+            Undo
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={onRedo} disabled={!onRedo}>
+            <Redo2 size={16} aria-hidden />
+            Redo
+          </Button>
+          <Button type="button" size="sm" variant="secondary" onClick={onDeleteLatest} disabled={!onDeleteLatest}>
+            <Trash2 size={16} aria-hidden />
+            Delete
+          </Button>
+        </div>
         <div className="flex min-w-36 flex-1 items-center gap-3">
           <input
             aria-label="Video scrubber"
@@ -434,17 +610,33 @@ export function AnnotatedVideo({
             max={duration || 1}
             step={0.05}
             value={currentTime}
-            onChange={(event) => {
-              const nextTime = Number(event.target.value);
-              if (videoRef.current) {
-                videoRef.current.currentTime = nextTime;
-              }
-              setCurrentTime(nextTime);
-            }}
+            onChange={(event) => seekToTime(Number(event.target.value))}
           />
           <span className="w-24 text-right text-xs font-bold text-ink/60">
             {formatDuration(currentTime)} / {formatDuration(duration)}
           </span>
+        </div>
+        <div className="rounded-md border border-ink/10 bg-paper p-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-ink/55">Timeline</p>
+            <span className="text-xs font-semibold text-ink/60">{formatDuration(currentTime)}</span>
+          </div>
+          {timelineMarkers.length ? (
+            <div className="flex flex-wrap gap-2">
+              {timelineMarkers.map((marker) => (
+                <button
+                  key={`${marker.kind}-${marker.id}`}
+                  type="button"
+                  className="rounded-full border border-moss/20 bg-white px-2.5 py-1 text-xs font-semibold text-moss"
+                  onClick={() => seekToTime(marker.time)}
+                >
+                  {marker.title}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm font-semibold text-ink/55">Add bookmarks or chapters to jump between key positions.</p>
+          )}
         </div>
       </div>
     </div>
